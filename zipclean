@@ -1,0 +1,40 @@
+#!/usr/bin/env php
+<?php
+if($argc<2 || ($argv[1][0]=='-' && $argv[1]!='-d')): echo <<<EOB
+Usage: $argv[0] [-d] <filename.zip>
+       Cleans up after an unzip has littered files all over your current directory.
+       It does a filesize and mtime sanity check to try to make sure you are deleting the right files
+    -d deletes created directories as well
+
+EOB;
+else:
+$deldir = ($argv[1]=='-d') ? true:false;
+$skip = true;
+$fd = popen('unzip -l '.escapeshellarg(end($argv)), 'r');
+while(!feof($fd)) {
+	$line = fgets($fd);
+    if(!$skip) {
+        if($line[0]=='-') break;
+        $line = preg_replace('/\s+/', ' ', trim($line));
+        list($size, $ts1, $ts2, $fn) = explode(' ',$line,4);
+        $ts = strtotime($ts1.' '.$ts2);
+        if(file_exists($fn)) {
+            $stat = stat($fn);
+            if(is_dir($fn)) $dirs[$fn] = strlen($fn);
+            else if($size == $stat['size'] && abs($ts-$stat['mtime'])<60) {
+                echo "Deleting $fn\n"; 
+                system("rm ".escapeshellarg($fn));
+            } else {
+                echo "Not removing $fn because size or ts doesn't match\n";
+            }
+        }
+    }
+    if($line[0] == '-') $skip = false;
+}
+arsort($dirs);
+if(!$deldir) echo "Dirs from zip file which were not deleted:\n";
+foreach($dirs as $dir=>$len) {
+    if($deldir) { echo "Deleting $dir\n"; system("rmdir ".escapeshellarg($dir)); }
+    else echo $dir."\n";
+}
+endif;
